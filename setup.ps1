@@ -12,8 +12,6 @@ choco install -y firefox
 
 choco install -y jre8
 
-choco install -y notepad2
-
 choco install -y pstools
 
 # Enable Show Window Contents While Dragging
@@ -26,6 +24,22 @@ secedit /export /cfg policy.cfg
 (gc policy.cfg) -replace '(PasswordComplexity\s*=\s*).+', '${1}0' | sc policy.cfg
 secedit /configure /db $env:windir\security\policy.sdb /cfg policy.cfg /areas SECURITYPOLICY
 del policy.cfg
+
+####
+
+# get latest selenium standalone server
+$site = "http://selenium-release.storage.googleapis.com/" 
+$Test = Invoke-WebRequest -URI $Site
+$a = [xml]$Test.Content
+
+# determine the latest version of selenium server
+# loop through the array of $a and determine if key has selenium-server-standalone
+# set download url to https://selenium-release.storage.googleapis.com/${SELENIUM_VERSION}
+# download it
+
+# determine the latest chrome driver
+
+####
 
 # create the selenium-server user account.
 echo 'Creating selenium-server user account...'

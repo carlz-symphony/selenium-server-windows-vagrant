@@ -49,7 +49,7 @@ ROOT_PROVISION_SCRIPT
 
 Vagrant.configure("2") do |config|
     config.vm.define "selenium-server"
-    config.vm.box = "windows_2012_r2"
+    config.vm.box = "mwrock/Windows2012R2"
 
     config.vm.provider :virtualbox do |v, override|
         v.gui = true
