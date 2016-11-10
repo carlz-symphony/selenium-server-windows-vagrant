@@ -1,7 +1,7 @@
 # -*- mode: ruby -*-
 # vi: set ft=ruby :
 
-Vagrant.require_version “2”
+Vagrant.require_version ">= 1.6.2"
 
 # NB this is a PowerShell script that is run as Administrator.
 $root_provision_script = <<'ROOT_PROVISION_SCRIPT'
@@ -49,7 +49,7 @@ ROOT_PROVISION_SCRIPT
 
 Vagrant.configure("2") do |config|
     config.vm.define "selenium-server"
-    config.vm.box = "spn/win10-enterprise-en-x86 "
+    config.vm.box = "Microsoft/EdgeOnWindows10"
 
     config.vm.provider :virtualbox do |v, override|
         v.gui = true
