@@ -1,17 +1,17 @@
 # -*- mode: ruby -*-
 # vi: set ft=ruby :
 
-Vagrant.require_version ">= 1.6.2"
+Vagrant.require_version “2”
 
 # NB this is a PowerShell script that is run as Administrator.
 $root_provision_script = <<'ROOT_PROVISION_SCRIPT'
 # set keyboard layout.
 # NB you can get the name from the list:
 #      [System.Globalization.CultureInfo]::GetCultures('InstalledWin32Cultures') | out-gridview
-Set-WinUserLanguageList pt-PT -Force
+Set-WinUserLanguageList en-US -Force
 
 # set the date format, number format, etc.
-Set-Culture pt-PT
+Set-Culture en-US
 
 # set the timezone.
 # tzutil /l lists all available timezone ids
@@ -49,11 +49,11 @@ ROOT_PROVISION_SCRIPT
 
 Vagrant.configure("2") do |config|
     config.vm.define "selenium-server"
-    config.vm.box = "mwrock/Windows2012R2"
+    config.vm.box = "spn/win10-enterprise-en-x86 "
 
     config.vm.provider :virtualbox do |v, override|
         v.gui = true
-        v.customize ["modifyvm", :id, "--cpus", 2]
+        v.customize ["modifyvm", :id, "--cpus", 1]
         v.customize ["modifyvm", :id, "--memory", 2048]
         v.customize ["modifyvm", :id, "--vram", 32]
     end

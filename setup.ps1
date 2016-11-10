@@ -6,13 +6,15 @@
 # NB make sure this is the first software you install, because, as a side
 #    effect, this will trigger a reboot, which in turn, will fix the vagrant bug
 #    that prevents the machine from rebooting after setting the hostname.
-choco install -y google-chrome-x64
+choco install -y googlechrome
 
-choco install -y firefox
+choco install -y firefox --version 33.1
 
 choco install -y jre8
 
 choco install -y pstools
+
+#choco install -y 7zip
 
 # Enable Show Window Contents While Dragging
 reg ADD "HKCU\Control Panel\Desktop" /v DragFullWindows /t REG_SZ /d 1 /f
@@ -29,16 +31,35 @@ del policy.cfg
 
 # get latest selenium standalone server
 $site = "http://selenium-release.storage.googleapis.com/" 
-$Test = Invoke-WebRequest -URI $Site
-$a = [xml]$Test.Content
+$infopage = Invoke-WebRequest -URI $Site -UseBasicParsing
+$a = [xml]$infopage.Content
+$SELENIUM_VERSION = '';
 
-# determine the latest version of selenium server
-# loop through the array of $a and determine if key has selenium-server-standalone
-# set download url to https://selenium-release.storage.googleapis.com/${SELENIUM_VERSION}
-# download it
+# determine the latest version of selenium server and download it
+foreach ($a in $a.ListBucketResult.Contents) {
+  if ($a.key -like '*selenium-server-standalone*') {
+    $arr = $a.key.split("/");
+    $SELENIUM_VERSION = $a[0];
+    break;
+  }
+}
+$downloadurl = "https://selenium-release.storage.googleapis.com/" + $SELENIUM_VERSION
+Invoke-WebRequest -Uri $downloadurl -OutFile "selenium-server-standalone.jar" -UseBasicParsing
 
 # determine the latest chrome driver
-
+$site = "http://chromedriver.storage.googleapis.com/LATEST_RELEASE"
+$versionpage = Invoke-WebRequest -URI $Site -UseBasicParsing
+$CHROMEDRIVER_VERSION = $versionpage.Content
+$infopage = "http://chromedriver.storage.googleapis.com/"
+$a = [xml]$infopage.Content
+foreach ($a in $a.ListBucketResult.Contents) {
+  $stringmatch = "*" + $CHROMEDRIVER_VERSION + "*";
+  if ($a.key -like $stringmatch) {
+    $downloadurl = "http://chromedriver.storage.googleapis.com/" + $a.key;
+    Invoke-WebRequest -Uri $downloadurl -OutFile "chromedriver_win32.zip" -UseBasicParsing
+    Expand-Archive "chromedriver_win32.zip"
+  }
+}
 ####
 
 # create the selenium-server user account.
@@ -49,61 +70,25 @@ wmic useraccount where "name='selenium-server'" set PasswordExpires=FALSE
 # grant it Remote Desktop access.
 net localgroup 'Remote Desktop Users' selenium-server /add
 
+#add selenium cmd script to registry
+REG ADD "HKCU\Software\Microsoft\Windows\CurrentVersion\Run" /v selenium-server-standalone /t REG_EXPAND_SZ /d "C:\Vagrant\start-selenium.cmd" /f
+
 # install selenium server and setup Windows to Run it on logon.
-echo 'Waiting for C:\Vagrant to be available...'
+#echo 'Waiting for C:\Vagrant to be available...'
 # NB for some whacky reason we need to start a new explorer window to speedup
 #    the mounting of C:\Vagrant...
-Start-Process explorer
-while (-not (Test-Path -Path C:\Vagrant\Vagrantfile)) { Sleep 3 }
-@'
-echo 'Waiting for the USERPROFILE to become available...'
-while (-not (Test-Path -Path $env:USERPROFILE)) { Sleep 3 }
+#Start-Process explorer
+#while (-not (Test-Path -Path C:\Vagrant\Vagrantfile)) { Sleep 3 }
+#@'
+#echo 'Waiting for the USERPROFILE to become available...'
+#while (-not (Test-Path -Path $env:USERPROFILE)) { Sleep 3 }
+#echo 'Configuring logon to run Selenium Server Hub and Node...'
+#reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Run" /v selenium-server-hub /t REG_EXPAND_SZ /d "%USERPROFILE%\selenium-server\selenium-server-hub.cmd" /f
+#reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Run" /v selenium-server-node /t REG_EXPAND_SZ /d "%USERPROFILE%\selenium-server\selenium-server-node.cmd" /f
+#echo 'DONE installing the Selenium Server!'
+#Sleep 5
+#'@ | Out-File C:\tmp\install-selenium-server.ps1
 
-echo 'Extracting Selenium Server...'
-[System.Reflection.Assembly]::LoadWithPartialName("System.IO.Compression.FileSystem")
-[System.IO.Compression.ZipFile]::ExtractToDirectory("C:\Vagrant\selenium-server.zip", "$env:USERPROFILE\selenium-server")
-
-echo 'Configuring logon to run Selenium Server Hub and Node...'
-reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Run" /v selenium-server-hub /t REG_EXPAND_SZ /d "%USERPROFILE%\selenium-server\selenium-server-hub.cmd" /f
-reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Run" /v selenium-server-node /t REG_EXPAND_SZ /d "%USERPROFILE%\selenium-server\selenium-server-node.cmd" /f
-
-echo 'DONE installing the Selenium Server!'
-Sleep 5
-'@ | Out-File C:\tmp\install-selenium-server.ps1
-
-# NB the psexec command line has a limit of 260 bytes or so. thats why we use a temporary file.
-# NB we have to use psexec because I don't known a better way of doing this with powershell...
-echo 'Intalling the Selenium Server...'
-psexec -accepteula -u selenium-server -p $seleniumServerPassword powershell -File C:\tmp\install-selenium-server.ps1
-
-# poke a hole in the firewall to allow access to the 4444 TCP port.
-echo 'Configuring the firewall to allow access to the Selenium Server Hub...'
-netsh advfirewall firewall add rule name="Selenium Server Hub (HTTP-In)" dir=in action=allow protocol=TCP localport=4444
-
-# configure auto-logon to the selenium-server user.
-# NB this has to run AFTER this script ends! So be sure this is always at the
-#    end of this script.
-#    This is needed because Boxstarter will automatically disable the auto-logon
-#    it has set initially (for implementing the Reboot Resilient feature). BUT
-#    we also want to change the Auto-Logon configuration... so we have to make
-#    sure that the $enableAutoLogonScript script always executes after this
-#    script ends; that way we always override what Boxstarter did.
-$enableAutoLogonScript = @"
-echo 'Configuring auto-logon to the selenium-server account...'
-Sleep 5
-
-reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon" /v AutoAdminLogon /t REG_SZ /d 1 /f
-reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon" /v DefaultUserName /t REG_SZ /d selenium-server /f
-reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon" /v DefaultPassword /t REG_SZ /d $seleniumServerPassword /f
-reg delete "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon" /v DefaultDomainName /f
-reg delete "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon" /v AutoLogonSID /f
-
-echo 'DONE!'
-echo yes | Out-File -Encoding ascii C:\Vagrant\setup-finished.txt
-"@
-
-$encodedEnableAutoLogonScript = [Convert]::ToBase64String(
-  [System.Text.Encoding]::Unicode.GetBytes($enableAutoLogonScript)
-)
-
-Start-Process powershell -ArgumentList '-EncodedCommand',$encodedEnableAutoLogonScript
+# diable windows firewall
+echo 'Disabling windows firewall'
+netsh advfirewall set allprofiles state off
